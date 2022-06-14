@@ -1,52 +1,65 @@
 #!/usr/bin/env python3
 
 import requests
+from bs4 import BeautifulSoup
 from urllib.parse import urljoin
+import os
 import os.path
 import hashlib
 
 index = open('index.md', 'w')
-checksums = open('SHA1SUM', 'w')
+checksums = {
+    alg: open(f'{alg.upper()}SUM', 'w')
+    for alg
+    in ['md5', 'sha1', 'sha256', 'sha512']
+}
 
-checksum_url = 'https://www.virtualhere.com/sites/default/files/usbserver/SHA1SUM'
-generic_builds = [
-    'vhusbdarm', 'vhusbdarm64', 'vhusbdi386', 'vhusbdmips', 'vhusbdmipsel', 'vhusbdx86_64',
-    'vhusbdwin64.exe', 'vhusbdwinarmw64.exe', 'vhusbdwinw64.exe',
-    'VirtualHereServer.dmg', 'VirtualHereServerUniversal.dmg',
-    'VirtualHere_4.4.1.qpkg',
-]
+index_url = 'https://www.virtualhere.com/usb_server_software'
 
 session = requests.Session()
 
-print('Downloading', checksum_url)
-response = session.get(checksum_url)
+print('Downloading', index_url)
+response = session.get(index_url)
 response.raise_for_status()
-for line in response.content.decode('utf-8').splitlines():
-    checksum, filename = line.split()
 
-    binary_url = urljoin(checksum_url, filename)
-    filename = os.path.basename(binary_url)
+soup = BeautifulSoup(response.content, 'lxml')
+for item in soup.find_all('li'):
 
-    is_optimised = filename not in generic_builds
-    if is_optimised:
-        local_filename = os.path.join('optimised', filename)
-    else:
-        local_filename = os.path.join('generic', filename)
-    try:
-        os.mkdir(os.path.dirname(local_filename))
-    except FileExistsError:
-        pass
+    link = item.find('a')
+    if not link:
+        continue
+    description = link.get_text()
 
-    print('Downloading', binary_url)
-    response = session.get(binary_url)
-    response.raise_for_status()
-    assert(hashlib.new('sha1', response.content).hexdigest() == checksum)
+    is_optimised = 'Optimized for' in description
 
-    with open(local_filename, 'wb') as f:
-       f.write(response.content)
+    binary_url = link.get('href', None)
+    if binary_url and binary_url.startswith('/sites/default/files/usbserver/'):
 
-    index.write(f'- [{filename}]({local_filename})\n')
-    checksums.write(f'{checksum} *{local_filename}\n')
+        binary_url = urljoin(index_url, binary_url)
+        filename = os.path.basename(binary_url)
+
+        print('Downloading', binary_url, description)
+        response = session.get(binary_url)
+        response.raise_for_status()
+
+        if is_optimised:
+            local_filename = os.path.join('optimised', filename)
+        else:
+            local_filename = os.path.join('generic', filename)
+
+        try:
+            os.mkdir(os.path.dirname(local_filename))
+        except FileExistsError:
+            pass
+
+        with open(local_filename, 'wb') as f:
+           f.write(response.content)
+
+        index.write(f'- [{description}]({local_filename}\n')
+        for alg, f in checksums.items():
+            checksum = hashlib.new(alg, response.content).hexdigest()
+            f.write(f'{checksum} *{local_filename}\n')
 
 index.close()
-checksums.close()
+for f in checksums.values():
+    f.close()
