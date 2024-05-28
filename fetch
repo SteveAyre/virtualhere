@@ -13,7 +13,7 @@ generic_builds = [
     'vhusbdarm', 'vhusbdarm64', 'vhusbdi386', 'vhusbdmips', 'vhusbdmipsel', 'vhusbdx86_64',
     'vhusbdwin64.exe', 'vhusbdwinarmw64.exe', 'vhusbdwinw64.exe',
     'VirtualHereServer.dmg', 'VirtualHereServerUniversal.dmg',
-    'VirtualHere_4.4.1.qpkg',
+    'VirtualHere_4.6.5.qpkg',
 ]
 
 session = requests.Session()
